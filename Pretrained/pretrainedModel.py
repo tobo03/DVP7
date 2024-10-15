@@ -18,7 +18,7 @@ class pretrainedModel(nn.Module):
         
         x = self.scale(x)       # Scales from 28x28 --> 224x224
         x = self.to_tensor(x)   # Makes it to a tensor.
-        x = x.unsqueeze(0)      # Adds a ditional dimension #? remove this if you don't five single images, but batches of images.
+        x = x.unsqueeze(0)      # Adds a ditional dimension #? remove this if you don't give single images, but batches of images.
         x = self.model(x)       # Inputs the data into the altered pretrained model.
         x = x.flatten()         # Flattens the output to a single vector.
         
@@ -30,6 +30,11 @@ if __name__ == "__main__":
     from tensorflow import keras
     from PIL import Image
     (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+    
     image = Image.fromarray(x_train[0]).convert('RGB')
-
     print(f"\n\n output --> {model(image)}\n\n")
+
+    #images = [Image.fromarray(x_train[i]).convert('RGB') for i in range(10)]
+    #print(f"\n\n output --> {model(image)}\n\n")
+    #for image in images:
+    #    print(f"\n\n output --> {model(image)}\n\n")
