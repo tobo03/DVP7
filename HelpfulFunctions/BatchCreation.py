@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from typing import Tuple
 
-def CreateBatch(X_tensor: torch.Tensor, y_train: np.ndarray, batch_size: int) -> Tuple[torch.Tensor, np.ndarray]:
+def createBatch(X_tensor: torch.Tensor, y_train: np.ndarray, batch_size: int) -> Tuple[torch.Tensor, np.ndarray]:
     """
     Creates a batch from the given dataset.
     
