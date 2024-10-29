@@ -10,7 +10,7 @@ def CreateBatch(X_tensor: torch.Tensor, y_train: np.ndarray, batch_size: int) ->
     Parameters
     ----------
         X_tensor (torch.Tensor) : The input tensor with all data samples. Shape should be (sample_size, features).
-        y_train (np.ndarray) : The labels corresponding to the samples in X_tensor. Shape should be (sample_size, 1).
+        y_train (np.ndarray) : The labels corresponding to the samples in X_tensor. Shape should be (sample_size,).
         batch_size (int) : The size of the batch to create.
  
     Returns
@@ -20,6 +20,6 @@ def CreateBatch(X_tensor: torch.Tensor, y_train: np.ndarray, batch_size: int) ->
     """
     batch_i = random.sample(range(len(X_tensor)), batch_size)
     X_batch = torch.stack( [X_tensor[j] for j in batch_i] )
-    y_batch = [y_train[j] for j in batch_i]
+    y_batch = np.array([y_train[j] for j in batch_i])
 
     return X_batch, y_batch
