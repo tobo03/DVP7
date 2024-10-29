@@ -1,7 +1,7 @@
 import numpy as np
 import tqdm
 
-def mean_average_precision(test_hashes, training_hashes, test_labels, training_labels, compare_n):
+def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_labels, compare_n):
     aps = []
     training_hashes = training_hashes[:compare_n,:]
     training_labels = training_labels[:compare_n]
