@@ -1,15 +1,17 @@
 import numpy as np
 import tqdm
+import pandas as pd
 
-def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_labels, compare_n):
+def meanAveragePrecision(test_hashes: np.ndarray, training_hashes: np.ndarray, test_labels: np.ndarray, training_labels: np.ndarray, compare_n: int):
     aps = []
     training_hashes = training_hashes[:compare_n,:]
     training_labels = training_labels[:compare_n]
-    for i, test_hash in enumerate(tqdm(test_hashes)):
+    for i, test_hash in enumerate(test_hashes):
         label = test_labels[i]
         distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
         tp = np.where(training_labels==label, 1, 0)
         hash_df = pd.DataFrame({"distances":distances, "tp":tp}).reset_index()
+        print(hash_df)
         hash_df = hash_df.drop(index=i)
         hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
         hash_df = hash_df.drop(["index", "distances"], axis=1).reset_index()
