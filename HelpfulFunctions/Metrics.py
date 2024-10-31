@@ -2,7 +2,7 @@ import numpy as np
 import tqdm
 import pandas as pd
 
-def mean_average_precision(test_hashes, training_hashes, test_labels, training_labels):
+def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_labels):
     aps = []
     for i, test_hash in enumerate(tqdm(test_hashes)):
         label = test_labels[i]
