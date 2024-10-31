@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix
 import time
 import warnings
+from sklearn.cluster import KMeans
+import sys
 
 
 warnings.filterwarnings("ignore")
@@ -50,15 +52,59 @@ def p_at_k(test_hashes, training_hashes, test_labels, training_labels, ks):
             k_dic[k].append(patk)
     return tuple([np.array(k_dic[k]).mean() for k in ks])
 
-X_train = np.load(r'C:\Users\Test\Desktop\p7\Spectral\features\train_features_vgg16_cifar10.npy')
-X_test = np.load(r'C:\Users\Test\Desktop\p7\Spectral\features\test_features_vgg16_cifar10.npy')
-y_train = np.load(r'C:\Users\Test\Desktop\p7\Spectral\features\train_labels_vgg16_cifar10.npy')
-y_test = np.load(r'C:\Users\Test\Desktop\p7\Spectral\features\test_labels_vgg16_cifar10.npy')
+def calculate_top_k_distances(anchors, data_points, k=20):
+    # Convert anchors and data_points to numpy arrays for easy computation
+    anchors = np.array(anchors)
+    data_points = np.array(data_points)
+    top_k_distances = np.zeros((data_points.shape[0], k))
+    top_k_indices = np.zeros((data_points.shape[0], k), dtype=int)
 
-X_val = X_train[-5000:,:]
-X_train = X_train[:-5000,:]
-y_val = y_train[-5000:]
-y_train = y_train[:-5000]
+    for i, data_point in enumerate(data_points):
+        # Compute Euclidean distances between this data point and all anchors
+        distances = np.sqrt(np.sum((anchors - data_point) ** 2, axis=1))
+
+        k_smallest_indices = np.argpartition(distances, k)[:k]
+        k_smallest_distances = distances[k_smallest_indices]
+        sorted_indices = np.argsort(k_smallest_distances)
+        top_k_distances[i] = k_smallest_distances[sorted_indices]
+        top_k_indices[i] = k_smallest_indices[sorted_indices]
+
+    return top_k_distances, top_k_indices
+
+def anchor_adjecency(data, n_anchors, s, t):
+    # Step 1: Anchor selection using k-means
+    kmeans = KMeans(n_clusters=n_anchors, random_state=42)
+    kmeans.fit(data)
+    anchors = kmeans.cluster_centers_  # Get the anchor points
+
+    Z = np.zeros([data.shape[0], n_anchors])
+    dist,indices = calculate_top_k_distances(anchors, data, k=s)
+
+    for i in range(data.shape[0]):
+        for j, index in enumerate(indices[i]):
+            top = np.exp(-dist[i][j]/t)
+            bottom = 0
+            for k in range(indices.shape[1]):
+                bottom += np.exp(-dist[i][k]/t)
+            Z[i,index] = top/bottom
+
+    L = (1/np.sqrt(Z.sum(axis=0)))*np.identity(Z.shape[1])
+
+    M = L @ Z.T @ Z @ L
+
+    return M, Z, L
+
+
+
+root = ''
+sys.path.append(root)
+
+X_train = np.load( root + "Features/train_features_vgg16_cifar10.npy" ) # Shape = (40000, 4096)
+y_train = np.load( root + "Features/train_labels_vgg16_cifar10.npy" ) # Shape = (40000,)
+X_val = np.load( root + "Features/val_features_vgg16_cifar10.npy" ) # Shape = (40000, 4096)
+y_val = np.load( root + "Features/val_labels_vgg16_cifar10.npy" ) # Shape = (40000,)
+X_test = np.load( root + "Features/test_features_vgg16_cifar10.npy" ) # Shape = (10000, 4096)
+y_test = np.load( root + "Features/test_labels_vgg16_cifar10.npy" ) # Shape = (10000,)
 
 
 scaler = StandardScaler()
@@ -72,55 +118,41 @@ training_features = pca.fit_transform(X_train)  # Fit PCA on the standardized da
 val_features = pca.transform(X_val)
 test_features = pca.transform(X_test)
 
-ks = [i for i in range(50, 1050, 50)]
+ks = [i for i in range(1000, 11000, 2000)]
 
-#results_df = pd.DataFrame(columns=["Neighbours", "Bits", "MAP_10000", "time_nearest_neigbours", "time_Laplacian", "time_eigenvectors", "time_mlp"]+[f"P@{k}" for k in ks])
-results_df = pd.read_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv')
+results_df = pd.DataFrame(columns=["Anchors", "Top k", "Bits", "MAP"]+[f"P@{k}" for k in ks])
+#results_df = pd.read_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv')
 
-for bits in [32, 64, 128]:
-    for neighbours in tqdm(range(1, 10)):
+for n_anchors in range(100, 1000, 50):
+    print(n_anchors)
+    for s in tqdm(range(10, 100, 10)):
 
-        start = time.time()
-        nbrs = NearestNeighbors(n_neighbors=neighbours).fit(training_features)
-        # Find the nearest neighbors
-        distances, indices = nbrs.kneighbors(training_features)
+        M, Z, L = anchor_adjecency(training_features, n_anchors= n_anchors, s=s, t=1)
 
-        # Create an adjacency matrix
-        n_samples = training_features.shape[0]
-        adjacency_matrix = np.zeros((n_samples, n_samples))
+        eigenvalues, eigenvectors = eigsh(M, k=49,which="LM") # overvej max_iter, tolerance?
 
-        # Populate the adjacency matrix
-        for i, neighbors in enumerate(indices):
-            for neighbor in neighbors:
-                adjacency_matrix[i, neighbor] = 1
-                adjacency_matrix[neighbor, i] = 1  # Ensure symmetry for an undirected graph
-        nn_time = time.time() - start
+        eigenvalues = eigenvalues[:-1]
+        eigenvectors = eigenvectors[:,:-1]
 
-        start = time.time()
-        dim=adjacency_matrix.shape[0]
-        adjacency_matrix = adjacency_matrix - np.identity(dim)
-        D = np.zeros([dim,dim])
-        for i in range(dim):
-            D[i,i] = adjacency_matrix[i].sum()
-        L = D- adjacency_matrix
-        L= csr_matrix(L)
-        laplace_time = time.time() - start
+        for bits in [12, 24, 32, 48]:
+            eigenvalues = eigenvalues[-bits:]
+            eigenvectors = eigenvectors[:,-bits:]
 
-        start = time.time()
-        eigenvalues, eigenvectors = eigsh(L, k=bits+1, which="SM")
-        eigenvectors = eigenvectors[:,1:] #remove 0 eigenvalue
-        eigenvectors_bin = np.where(eigenvectors > 0, 1, 0)
-        eigen_time = time.time() - start
+            S = np.flip(1/np.sqrt(eigenvalues))*np.identity(eigenvalues.shape[0])
+            V = eigenvectors
 
-        start = time.time()
-        clf = MLPClassifier(hidden_layer_sizes=(100), max_iter=1000).fit(training_features, eigenvectors_bin)
-        val_hashes = clf.predict(val_features)
-        mlp_time = time.time() - start
+            Y = np.sqrt(training_features.shape[0]) * Z @ L @ V @ S
 
-        map = mean_average_precision(val_hashes, eigenvectors_bin, y_val, y_train)
+            threshold1 = 0
+            eigenvectors_bin = np.where(Y > threshold1, 1, 0)
 
-        p_at_ks = p_at_k(val_hashes, eigenvectors_bin, y_val, y_train, ks)
+            clf = MLPClassifier(hidden_layer_sizes=(100), max_iter=1000).fit(training_features, eigenvectors_bin)
+            val_hashes = clf.predict(val_features)
 
-        results_df.loc[results_df.shape[0]] = (neighbours, bits, map, nn_time, laplace_time, eigen_time, mlp_time) + p_at_ks
+            map = mean_average_precision(val_hashes, eigenvectors_bin, y_val, y_train)
 
-        results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv', index=False)
+            p_at_ks = p_at_k(val_hashes, eigenvectors_bin, y_val, y_train, ks)
+
+            results_df.loc[results_df.shape[0]] = (n_anchors, s, bits, map) + p_at_ks
+
+            results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv', index=False)
