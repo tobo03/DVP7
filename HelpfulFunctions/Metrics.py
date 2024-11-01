@@ -21,11 +21,9 @@ def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_lab
     return np.array(aps).mean()
 
 
-def p_at_k(test_hashes, training_hashes, test_labels, training_labels, compare_n, ks):
+def p_at_k(test_hashes, training_hashes, test_labels, training_labels, ks):
     k_dic = {k:[] for k in ks}
-    training_hashes = training_hashes[:compare_n,:]
-    training_labels = training_labels[:compare_n]
-    for i, test_hash in enumerate(tqdm(test_hashes)):
+    for i, test_hash in enumerate(test_hashes):
         label = test_labels[i]
         distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
         tp = np.where(training_labels==label, 1, 0)
