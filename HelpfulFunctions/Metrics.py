@@ -1,5 +1,5 @@
 import numpy as np
-import tqdm
+from tqdm import tqdm
 import pandas as pd
 
 def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_labels):
