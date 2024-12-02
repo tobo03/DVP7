@@ -99,86 +99,28 @@ def anchor_adjecency(data, n_anchors, s, t):
 root = ''
 sys.path.append(root)
 
-X_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Cifar\X_hpo_Cifar.npy" ) # Shape = (40000, 4096)
-y_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Cifar\y_hpo_Cifar.npy") # Shape = (40000,)
-X_val = np.load( r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Cifar\X_val_Cifar.npy" ) # Shape = (40000, 4096)
-y_val = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Cifar\y_val_Cifar.npy") # Shape = (40000,)
+X_train = np.load( root + "Features/train_features_vgg16_cifar10.npy" ) # Shape = (40000, 4096)
+y_train = np.load( root + "Features/train_labels_vgg16_cifar10.npy" ) # Shape = (40000,)
+X_val = np.load( root + "Features/val_features_vgg16_cifar10.npy" ) # Shape = (40000, 4096)
+y_val = np.load( root + "Features/val_labels_vgg16_cifar10.npy" ) # Shape = (40000,)
+X_test = np.load( root + "Features/test_features_vgg16_cifar10.npy" ) # Shape = (10000, 4096)
+y_test = np.load( root + "Features/test_labels_vgg16_cifar10.npy" ) # Shape = (10000,)
 
 
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)  # Standardize the data
 X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
 
 
-pca = PCA(n_components=128)  # Set the number of components to keep
+pca = PCA(n_components=100)  # Set the number of components to keep
 training_features = pca.fit_transform(X_train)  # Fit PCA on the standardized data and transform
 val_features = pca.transform(X_val)
+test_features = pca.transform(X_test)
 
+ks = [i for i in range(1000, 11000, 2000)]
 
-results_df = pd.DataFrame(columns=["Anchors", "Top k", "Bits", "MAP"])
-#results_df = pd.read_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv')
-train_len = len(training_features)
-
-p = int(train_len/100)
-for n_anchors in range(p, p*5 , p):
-    print(n_anchors)
-    for s in tqdm(range(int(p/10), int(p/2), 10)):
-
-        M, Z, L = anchor_adjecency(training_features, n_anchors= n_anchors, s=s, t=1)
-
-        eigenvalues, eigenvectors = eigsh(M, k=49,which="LM") # overvej max_iter, tolerance?
-
-        eigenvalues = eigenvalues[:-1]
-        eigenvectors = eigenvectors[:,:-1]
-
-        for bits in [12, 24, 32, 48]:
-            eigenvalues = eigenvalues[-bits:]
-            eigenvectors = eigenvectors[:,-bits:]
-
-            S = np.flip(1/np.sqrt(eigenvalues))*np.identity(eigenvalues.shape[0])
-            V = eigenvectors
-
-            Y = np.sqrt(training_features.shape[0]) * Z @ L @ V @ S
-
-            threshold1 = 0
-            eigenvectors_bin = np.where(Y > threshold1, 1, 0)
-
-            clf = MLPClassifier(hidden_layer_sizes=(100), max_iter=1000).fit(training_features, eigenvectors_bin)
-            val_hashes = clf.predict(val_features)
-
-            map = mean_average_precision(val_hashes, eigenvectors_bin, y_val, y_train)
-
-            results_df.loc[results_df.shape[0]] = (train_len/n_anchors, train_len / s, bits, map)
-
-            results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results_cifar10.csv', index=False)
-
-print("cifar10 done")
-
-
-
-
-
-
-root = ''
-sys.path.append(root)
-
-X_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Nus Wide\X_hpo_Nus.npy") # Shape = (40000, 4096)
-y_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Nus Wide\y_hpo_Nus.npy") # Shape = (40000,)
-X_val = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Nus Wide\X_val_Nus.npy") # Shape = (40000, 4096)
-y_val = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Nus Wide\y_val_Nus.npy") # Shape = (40000,)
-
-
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)  # Standardize the data
-X_val = scaler.transform(X_val)
-
-
-pca = PCA(n_components=128)  # Set the number of components to keep
-training_features = pca.fit_transform(X_train)  # Fit PCA on the standardized data and transform
-val_features = pca.transform(X_val)
-
-
-results_df = pd.DataFrame(columns=["Anchors", "Top k", "Bits", "MAP"])
+results_df = pd.DataFrame(columns=["Anchors", "Top k", "Bits", "MAP"]+[f"P@{k}" for k in ks])
 #results_df = pd.read_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv')
 
 for n_anchors in range(100, 1000, 50):
@@ -209,65 +151,8 @@ for n_anchors in range(100, 1000, 50):
 
             map = mean_average_precision(val_hashes, eigenvectors_bin, y_val, y_train)
 
-            results_df.loc[results_df.shape[0]] = (n_anchors, s, bits, map)
+            p_at_ks = p_at_k(val_hashes, eigenvectors_bin, y_val, y_train, ks)
 
-            results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results_nuswide.csv', index=False)
+            results_df.loc[results_df.shape[0]] = (n_anchors, s, bits, map) + p_at_ks
 
-
-
-
-print("nuswide done")
-
-root = ''
-sys.path.append(root)
-
-X_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Imagenet\X_hpo_Img.npy") # Shape = (40000, 4096)
-y_train = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Imagenet\y_hpo_Img.npy") # Shape = (40000,)
-X_val = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Imagenet\X_val_Img.npy") # Shape = (40000, 4096)
-y_val = np.load(r"C:\Users\Test\Desktop\FINAL P7 FEATURES !!!!\Imagenet\y_val_Img.npy") # Shape = (40000,)
-
-
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)  # Standardize the data
-X_val = scaler.transform(X_val)
-
-
-pca = PCA(n_components=128)  # Set the number of components to keep
-training_features = pca.fit_transform(X_train)  # Fit PCA on the standardized data and transform
-val_features = pca.transform(X_val)
-
-
-results_df = pd.DataFrame(columns=["Anchors", "Top k", "Bits", "MAP"])
-#results_df = pd.read_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv')
-
-for n_anchors in range(100, 1000, 50):
-    print(n_anchors)
-    for s in tqdm(range(10, 100, 10)):
-
-        M, Z, L = anchor_adjecency(training_features, n_anchors= n_anchors, s=s, t=1)
-
-        eigenvalues, eigenvectors = eigsh(M, k=49,which="LM") # overvej max_iter, tolerance?
-
-        eigenvalues = eigenvalues[:-1]
-        eigenvectors = eigenvectors[:,:-1]
-
-        for bits in [12, 24, 32, 48]:
-            eigenvalues = eigenvalues[-bits:]
-            eigenvectors = eigenvectors[:,-bits:]
-
-            S = np.flip(1/np.sqrt(eigenvalues))*np.identity(eigenvalues.shape[0])
-            V = eigenvectors
-
-            Y = np.sqrt(training_features.shape[0]) * Z @ L @ V @ S
-
-            threshold1 = 0
-            eigenvectors_bin = np.where(Y > threshold1, 1, 0)
-
-            clf = MLPClassifier(hidden_layer_sizes=(100), max_iter=1000).fit(training_features, eigenvectors_bin)
-            val_hashes = clf.predict(val_features)
-
-            map = mean_average_precision(val_hashes, eigenvectors_bin, y_val, y_train)
-
-            results_df.loc[results_df.shape[0]] = (n_anchors, s, bits, map)
-
-            results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results_imagenet.csv', index=False)
+            results_df.to_csv(r'C:\Users\Test\Desktop\p7\Spectral\results\spectral_results.csv', index=False)
