@@ -9,27 +9,6 @@ def one_hot_encode(a):
     b[np.arange(a.size), a] = 1
     return b
 
-def meanAveragePrecision(test_hashes, training_hashes, test_labels, training_labels):
-    aps = []
-    if len(training_labels.shape) == 1:
-        training_labels = one_hot_encode(training_labels)
-        test_labels = one_hot_encode(test_labels)
-    for i, test_hash in enumerate(tqdm(test_hashes)):
-        label = test_labels[i]
-        distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
-        tp = np.where((training_labels*label).sum(axis=1)>0, 1, 0)
-        hash_df = pd.DataFrame({"distances":distances, "tp":tp}).reset_index()
-        hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
-        hash_df = hash_df.drop(["index", "distances"], axis=1).reset_index()
-        hash_df = hash_df[hash_df["tp"]==1]
-        hash_df["tp"] = hash_df["tp"].cumsum()
-        hash_df["index"] = hash_df["index"] +1 
-        precision = np.array(hash_df["tp"]) / np.array(hash_df["index"])
-        ap = precision.mean()
-        aps.append(ap)
-    
-    return np.array(aps).mean()
-
 def meanAveragePrecisionOptimized(test_hashes, training_hashes, test_labels, training_labels):
     aps = []
     if len(training_labels.shape) == 1:
@@ -53,33 +32,10 @@ def meanAveragePrecisionOptimized(test_hashes, training_hashes, test_labels, tra
 
     return np.mean(aps)
 
-def query(test_hash, training_hashes):
-    distances = np.abs(training_hashes - test_hash).sum(axis=1)
-    hash_df = pd.DataFrame({"distances":distances}).reset_index()
-    hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
-    return np.array(hash_df["index"])
-
 def query_optimized(test_hash, training_hashes):
     distances = np.abs(training_hashes - test_hash).sum(axis=1)
     #sorted_indices = np.lexsort((np.arange(len(distances)), distances))
     return np.lexsort((np.arange(len(distances)), distances)) #Virker???
-
-def p_at_k(test_hashes, training_hashes, test_labels, training_labels, ks):
-    k_dic = {k:[] for k in ks}
-    if len(training_labels.shape) == 1:
-        training_labels = one_hot_encode(training_labels)
-        test_labels = one_hot_encode(test_labels)
-    for i, test_hash in tqdm(enumerate(test_hashes)):
-        label = test_labels[i]
-        distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
-        tp = np.where((training_labels*label).sum(axis=1)>0, 1, 0)
-        hash_df = pd.DataFrame({"distances":distances, "tp":tp}).reset_index()
-        hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
-        for k in ks:
-            df_temp = hash_df[:k]
-            patk = df_temp["tp"].sum()/k
-            k_dic[k].append(patk)
-    return tuple([np.array(k_dic[k]).mean() for k in ks])
 
 def p_at_k_optimized(test_hashes, training_hashes, test_labels, training_labels, ks): 
     k_dic = {k: [] for k in ks}
@@ -108,7 +64,7 @@ def p_at_k_optimized(test_hashes, training_hashes, test_labels, training_labels,
     
     return tuple(np.mean(k_dic[k]) for k in ks)
 
-def average_pr_curve(precision_list, recall_list, num_points=100):
+def average_pr_curve_optimized(precision_list, recall_list, num_points=100):
     recall_levels = np.linspace(0, 1, num_points)
     interpolated_precisions = []
     for precision, recall in zip(precision_list, recall_list):
@@ -118,31 +74,7 @@ def average_pr_curve(precision_list, recall_list, num_points=100):
         interpolated_precision = np.interp(recall_levels, recall_sorted, precision_sorted, left=0, right=0)
         interpolated_precisions.append(interpolated_precision)
     avg_precision = np.mean(interpolated_precisions, axis=0)
-    return recall_levels, avg_precision
-
-def interpolated_pr_curve(test_hashes, training_hashes, test_labels, training_labels, num_points=100):
-    precision_list = []
-    recall_list = []
-    if len(training_labels.shape) == 1:
-        training_labels = one_hot_encode(training_labels)
-        test_labels = one_hot_encode(test_labels)
-    for i, test_hash in enumerate(tqdm(test_hashes)):
-        label = test_labels[i]
-        distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
-        tp = np.where((training_labels*label).sum(axis=1)>0, 1, 0)
-        hash_df = pd.DataFrame({"distances":distances, "tp":tp}).reset_index()
-        hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
-        hash_df = hash_df.drop(["index", "distances"], axis=1).reset_index()
-        hash_df["tp"] = hash_df["tp"].cumsum()
-        hash_df["index"] = hash_df["index"] +1 
-        precision = np.array(hash_df["tp"]) / np.array(hash_df["index"])
-        recall = np.array(hash_df["tp"]) / np.array(hash_df["tp"].max())
-        precision_list.append(precision)
-        recall_list.append(recall)
-
-    recall_levels, avg_precision = average_pr_curve(precision_list, recall_list, num_points=num_points)
-    
-    return recall_levels, avg_precision
+    return recall_levels, avg_precision # Beware den var optimal før også
 
 def interpolated_pr_curve_optimized(test_hashes, training_hashes, test_labels, training_labels, num_points=100): # InterPol???
     precision_list = []
@@ -175,26 +107,9 @@ def interpolated_pr_curve_optimized(test_hashes, training_hashes, test_labels, t
         recall_list.append(recall)
     
     # Compute interpolated average precision at recall levels
-    recall_levels, avg_precision = average_pr_curve(precision_list, recall_list, num_points=num_points)
+    recall_levels, avg_precision = average_pr_curve_optimized(precision_list, recall_list, num_points=num_points)
     
     return recall_levels, avg_precision    
-
-def p_at_dist(test_hashes, training_hashes, test_labels, training_labels, dists):
-    k_dic = {k:[] for k in dists}
-    if len(training_labels.shape) == 1:
-        training_labels = one_hot_encode(training_labels)
-        test_labels = one_hot_encode(test_labels)
-    for i, test_hash in tqdm(enumerate(test_hashes)):
-        label = test_labels[i]
-        distances = np.abs(training_hashes - test_hashes[i]).sum(axis=1)
-        tp = np.where((training_labels*label).sum(axis=1)>0, 1, 0)
-        hash_df = pd.DataFrame({"distances":distances, "tp":tp}).reset_index()
-        hash_df = hash_df.sort_values(["distances", "index"]).reset_index(drop=True)
-        for k in dists:
-            df_temp = hash_df[hash_df["distances"]<=k]
-            patk = df_temp["tp"].sum()/df_temp.shape[0] if df_temp.shape[0]>0 else 0
-            k_dic[k].append(patk)
-    return tuple([np.array(k_dic[k]).mean() for k in dists])
 
 def p_at_dist_optimized(test_hashes, training_hashes, test_labels, training_labels, dists):
     k_dic = {k: [] for k in dists}
